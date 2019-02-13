@@ -2132,6 +2132,47 @@ void EmpowerLVAPManager::add_handlers() {
 	add_write_handler("debug", write_handler, (void *) H_DEBUG);
 }
 
+//TFM starts here
+int EmpowerLVAPManager::handle_update_wtp_channel_request(Packet *p, uint32_t offset)
+{
+	struct empower_update_wtp_channel_request *q = (struct empower_update_wtp_channel_request *) (p->data() + offset);
+	uint8_t new_channel = q->new_channel();
+	uint8_t old_channel = q->old_channel();
+	EtherAddress hwaddr = q->hwaddr();
+	empower_bands_types band = (empower_bands_types) q->band();
+
+	int iface = element_to_iface(hwaddr, old_channel, band);
+
+	if (iface == -1) {
+	   click_chatter("%{element} :: %s :: Invalid resource element interface %d!",
+								 this,
+								 __func__,
+								 iface);
+	   return 0;
+	}
+
+	ResourceElement* re = _ifaces_to_elements.get(iface);
+	re->_channel = new_channel;
+
+	char cmd[128] = "";
+	sprintf(cmd, "iw moni0 set channel %d", new_channel);
+	system(cmd);
+
+	if (system(cmd) != 0)
+		click_chatter("%{element} :: %s :: Error in switching channel: %s",
+							  this,
+							  __func__,
+							  cmd);
+	else
+		click_chatter("%{element} :: %s :: Successful channel switch: %s",
+							  this,
+							  __func__,
+							  cmd);
+
+}
+
+//TFM ends here
+
 CLICK_ENDDECLS
 EXPORT_ELEMENT(EmpowerLVAPManager)
 ELEMENT_REQUIRES(userlevel EmpowerRXStats)

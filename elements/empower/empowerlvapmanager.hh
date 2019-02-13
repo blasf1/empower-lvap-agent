@@ -300,6 +300,8 @@ public:
 	int handle_slice_queue_counters_request(Packet *, uint32_t);
 	int handle_slice_status_request(Packet *, uint32_t);
 	int handle_port_status_request(Packet *, uint32_t);
+	//TFM Function
+	int handle_update_wtp_channel_request(Packet *p, uint32_t offset);
 
 	void send_hello();
 	void send_probe_request(EtherAddress, String, EtherAddress, int, empower_bands_types, empower_bands_types);

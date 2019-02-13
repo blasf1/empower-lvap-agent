@@ -89,6 +89,9 @@ enum empower_packet_types {
     EMPOWER_PT_TXP_COUNTERS_REQUEST = 0x35,         // ac -> wtp
     EMPOWER_PT_TXP_COUNTERS_RESPONSE = 0x36,        // wtp -> ac
 
+    //TFM
+    EMPOWER_PT_WTP_CHANNEL_REQUEST = 0X70,
+
 };
 
 /* header format, common to all messages */
@@ -863,6 +866,22 @@ struct empower_slice_queue_counters_response : public empower_header {
     void set_tx_packets(uint32_t tx_packets)    			{ _tx_packets = htonl(tx_packets); }
     void set_tx_bytes(uint32_t tx_bytes)    				{ _tx_bytes = htonl(tx_bytes); }
 } CLICK_SIZE_PACKED_ATTRIBUTE;
+
+//TFM starts here
+struct empower_update_wtp_channel_request : public empower_header {
+private:
+  uint8_t _new_channel; /* new channel number */
+  uint8_t _hwaddr[6];   /* EtherAddress */
+  uint8_t _old_channel; /* WiFi channel (int) */
+  uint8_t _band;      /* WiFi band (empower_band_types) */
+public:
+  uint8_t     new_channel()   { return _new_channel; }
+  uint8_t       band()        { return _band; }
+  uint8_t       old_channel()   { return _old_channel; }
+  EtherAddress  hwaddr()      { return EtherAddress(_hwaddr); }
+} CLICK_SIZE_PACKED_ATTRIBUTE;
+
+//TFM ends here
 
 CLICK_ENDDECLS
 #endif /* CLICK_EMPOWERPACKET_HH */
