@@ -89,6 +89,9 @@ enum empower_packet_types {
     EMPOWER_PT_TXP_COUNTERS_REQUEST = 0x35,         // ac -> wtp
     EMPOWER_PT_TXP_COUNTERS_RESPONSE = 0x36,        // wtp -> ac
 
+    //TFM
+    EMPOWER_PT_WTP_CHANNEL_UPDATE_REQUEST = 0X70, //assign code to packet
+
 };
 
 /* header format, common to all messages */
@@ -294,12 +297,12 @@ public:
 struct wifi_stats_entry {
   private:
       uint8_t  _type;       /* EtherAddress */
-      uint32_t _timestamp;  /* Timestamp in microseconds (int) */
+      uint64_t _timestamp;  /* Timestamp in microseconds (int) */
       uint32_t _sample;     /* Std RSSI during last window in dBm (int) */
   public:
     void set_type(uint8_t type)                         { _type = type; }
     void set_sample(uint32_t sample)                    { _sample = htonl(sample); }
-    void set_timestamp(uint32_t timestamp)              { _timestamp = htonl(timestamp); }
+    void set_timestamp(uint64_t timestamp)              { _timestamp = htobe64(timestamp); }
 } CLICK_SIZE_PACKED_ATTRIBUTE;
 
 /* wifi stats response packet format */
@@ -774,18 +777,20 @@ struct empower_igmp_report : public empower_header {
 
 struct empower_set_slice : public empower_header {
   private:
-    uint16_t    _flags;             /* Aggregation flags */
-    uint8_t     _hwaddr[6];         /* EtherAddress */
-    uint8_t     _channel;           /* WiFi channel (int) */
-    uint8_t     _band;              /* WiFi band (empower_band_types) */
-    uint32_t    _quantum;           /* Priority of the slice (int) */
-    uint8_t     _dscp;              /* Traffic DSCP (int) */
-    char         _ssid[WIFI_NWID_MAXSIZE+1];    /* Null terminated SSID */
+    uint16_t    _flags;         /* Aggregation flags */
+    uint8_t     _hwaddr[6];     /* EtherAddress */
+    uint8_t     _channel;       /* WiFi channel (int) */
+    uint8_t     _band;          /* WiFi band (empower_band_types) */
+    uint32_t    _quantum;       /* Priority of the slice (int) */
+    uint32_t    _scheduler;     /* User airtime scheduler (int) */
+    uint8_t     _dscp;          /* Traffic DSCP (int) */
+    char        _ssid[WIFI_NWID_MAXSIZE+1];    /* Null terminated SSID */
   public:
     uint8_t         band()          { return _band; }
     uint8_t         channel()       { return _channel; }
     EtherAddress    hwaddr()        { return EtherAddress(_hwaddr); }
     uint32_t        quantum()       { return ntohl(_quantum); }
+    uint32_t        scheduler()     { return ntohl(_scheduler); }
     bool            flags(int f)    { return ntohs(_flags) & f; }
     uint8_t         dscp()          { return _dscp; }
     String 			ssid()          { return String((char *) _ssid); }
@@ -809,23 +814,25 @@ struct empower_del_slice : public empower_header {
 /* slice status packet format */
 struct empower_status_slice : public empower_header {
   private:
-    uint8_t     _wtp[6];            /* EtherAddress */
-    uint16_t    _flags;             /* Aggregation flags */
-    uint8_t     _hwaddr[6];         /* EtherAddress */
-    uint8_t     _channel;           /* WiFi channel (int) */
-    uint8_t     _band;              /* WiFi band (empower_band_types) */
-    uint32_t    _quantum;           /* Priority of the slice (int) */
-    uint8_t     _dscp;              /* Traffic DSCP (int) */
+    uint8_t     _wtp[6];    /* EtherAddress */
+    uint16_t    _flags;     /* Aggregation flags */
+    uint8_t     _hwaddr[6]; /* EtherAddress */
+    uint8_t     _channel;   /* WiFi channel (int) */
+    uint8_t     _band;      /* WiFi band (empower_band_types) */
+    uint32_t    _quantum;   /* Priority of the slice (int) */
+    uint32_t    _scheduler; /* User airtime scheduler (int) */
+    uint8_t     _dscp;      /* Traffic DSCP (int) */
     char        _ssid[WIFI_NWID_MAXSIZE+1];    /* Null terminated SSID */
   public:
-    void set_band(uint8_t band)             { _band = band; }
-    void set_channel(uint8_t channel)       { _channel = channel; }
-    void set_hwaddr(EtherAddress hwaddr)    { memcpy(_hwaddr, hwaddr.data(), 6); }
-    void set_wtp(EtherAddress wtp)          { memcpy(_wtp, wtp.data(), 6); }
-    void set_dscp(uint8_t dscp)             { _dscp = dscp; }
-    void set_quantum(uint32_t quantum)      { _quantum = htonl(quantum); }
-    void set_flags(uint16_t f)              { _flags = htons(ntohs(_flags) | f); }
-    void set_ssid(String ssid)          	{ memset(_ssid, 0, WIFI_NWID_MAXSIZE+1); memcpy(_ssid, ssid.data(), ssid.length()); }
+    void set_band(uint8_t band)             	{ _band = band; }
+    void set_channel(uint8_t channel)       	{ _channel = channel; }
+    void set_hwaddr(EtherAddress hwaddr)    	{ memcpy(_hwaddr, hwaddr.data(), 6); }
+    void set_wtp(EtherAddress wtp)          	{ memcpy(_wtp, wtp.data(), 6); }
+    void set_dscp(uint8_t dscp)             	{ _dscp = dscp; }
+    void set_quantum(uint32_t quantum)       	{ _quantum = htonl(quantum); }
+    void set_scheduler(uint32_t scheduler)   	{ _scheduler = htonl(scheduler); }
+    void set_flags(uint16_t f)              	{ _flags = htons(ntohs(_flags) | f); }
+    void set_ssid(String ssid)              	{ memset(_ssid, 0, WIFI_NWID_MAXSIZE+1); memcpy(_ssid, ssid.data(), ssid.length()); }
 } CLICK_SIZE_PACKED_ATTRIBUTE;
 
 /* slice queue stats request packet format */
@@ -863,6 +870,23 @@ struct empower_slice_queue_counters_response : public empower_header {
     void set_tx_packets(uint32_t tx_packets)    			{ _tx_packets = htonl(tx_packets); }
     void set_tx_bytes(uint32_t tx_bytes)    				{ _tx_bytes = htonl(tx_bytes); }
 } CLICK_SIZE_PACKED_ATTRIBUTE;
+
+//TFM starts here
+//Define the packet for the request of channel update
+struct empower_wtp_channel_update_request : public empower_header {
+private:
+  uint8_t _new_channel; /* new channel number */
+  uint8_t _hwaddr[6];   /* EtherAddress */
+  uint8_t _old_channel; /* WiFi channel (int) */
+  uint8_t _band;      /* WiFi band (empower_band_types) */
+public:
+  uint8_t       new_channel()   { return _new_channel; }
+  uint8_t       band()        { return _band; }
+  uint8_t       old_channel()   { return _old_channel; }
+  EtherAddress  hwaddr()      { return EtherAddress(_hwaddr); }
+} CLICK_SIZE_PACKED_ATTRIBUTE;
+
+//TFM ends here
 
 CLICK_ENDDECLS
 #endif /* CLICK_EMPOWERPACKET_HH */

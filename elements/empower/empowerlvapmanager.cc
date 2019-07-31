@@ -378,6 +378,7 @@ void EmpowerLVAPManager::send_status_slice(String ssid, int dscp, int iface_id) 
     status->set_hwaddr(re->_hwaddr);
     status->set_channel(re->_channel);
     status->set_band(re->_band);
+    status->set_scheduler(queue->_scheduler);
 
 	if (queue->_amsdu_aggregation) {
 		status->set_flags(EMPOWER_AMSDU_AGGREGATION);
@@ -1221,7 +1222,7 @@ int EmpowerLVAPManager::handle_add_vap(Packet *p, uint32_t offset) {
 		/* create default slice */
 		if (ssid != "") {
 			// TODO: for the moment assume that at worst a 1500 bytes frame can be sent in 12000 usec
-			_eqms[iface]->set_slice(ssid, 0, 12000, false);
+			_eqms[iface]->set_slice(ssid, 0, 12000, false, 0);
 		}
 
 		return 0;
@@ -1676,8 +1677,9 @@ int EmpowerLVAPManager::handle_set_slice(Packet *p, uint32_t offset) {
 	String ssid = add_slice->ssid();
 	uint32_t quantum = add_slice->quantum();
 	bool amsdu_aggregation = add_slice->flags(EMPOWER_AMSDU_AGGREGATION);
+	uint32_t scheduler = add_slice->scheduler();
 
-	_eqms[iface_id]->set_slice(ssid, dscp, quantum, amsdu_aggregation);
+	_eqms[iface_id]->set_slice(ssid, dscp, quantum, amsdu_aggregation, scheduler);
 
 	return 0;
 
@@ -1701,6 +1703,52 @@ int EmpowerLVAPManager::handle_del_slice(Packet *p, uint32_t offset) {
 	return 0;
 
 }
+
+//TFM starts here
+int EmpowerLVAPManager::handle_wtp_channel_update_request(Packet *p, uint32_t offset)
+{
+	struct empower_wtp_channel_update_request *q = (struct empower_wtp_channel_update_request *) (p->data() + offset);
+	uint8_t new_channel = q->new_channel();
+	uint8_t old_channel = q->old_channel();
+	EtherAddress hwaddr = q->hwaddr();
+	empower_bands_types band = (empower_bands_types) q->band();
+
+	int iface = element_to_iface(hwaddr, old_channel, band);
+	
+	// click_chatter("%{element} :: %s :: Error in  old_channel: %s",
+	// 						this,
+	// 						__func__,
+	// 						old_channel);
+
+
+	if (iface == -1) {
+	   click_chatter("%{element} :: %s :: Invalid resource element interface %d!",
+								 this,
+								 __func__,
+								 iface);
+	   return 0;
+	}
+
+	ResourceElement* re = _ifaces_to_elements.get(iface);
+	re->_channel = new_channel;
+
+	char cmd[128] = "";
+	sprintf(cmd, "iw moni0 set channel %d", new_channel);
+	system(cmd);
+
+	if (system(cmd) != 0)
+		click_chatter("%{element} :: %s :: Error in switching channel: %s",
+							  this,
+							  __func__,
+							  cmd);
+	else
+		click_chatter("%{element} :: %s :: Successful channel switch: %s",
+							  this,
+							  __func__,
+							  cmd);
+}
+
+//TFM ends here
 
 void EmpowerLVAPManager::push(int, Packet *p) {
 
@@ -1803,6 +1851,9 @@ void EmpowerLVAPManager::push(int, Packet *p) {
 			break;
 		case EMPOWER_PT_PORT_STATUS_REQ:
 			handle_port_status_request(p, offset);
+			break;
+		case EMPOWER_PT_WTP_CHANNEL_UPDATE_REQUEST:
+			handle_wtp_channel_update_request(p, offset); //TFM: define what to do when this packet arrives
 			break;
 		default:
 			click_chatter("%{element} :: %s :: Unknown packet type: %d",
